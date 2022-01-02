@@ -13,76 +13,99 @@ provider:
   lambdaHashingVersion: 20201221
   region: ${opt:region, env:AWS_REGION, 'us-east-1'}
   logRetentionInDays: ${opt:logretention, env:AWS_LOG_RETENTION, '14'}
+  httpApi:
+    useProviderTags: true
+    cors: true
   deploymentBucket:
     tags:
       Purpose: ${self:service}
 
-# you can overwrite defaults here
-#  stage: dev
-#  region: us-east-1
+  environment:
+    TEMPLATE_BUCKET: !Ref TemplateBucket
+    SUBSCRIBERS_DYNAMODB_TABLE: !Ref Subscribers
 
-# you can add statements to the Lambda function's IAM Role here
-#  iamRoleStatements:
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:ListBucket"
-#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:PutObject"
-#      Resource:
-#        Fn::Join:
-#          - ""
-#          - - "arn:aws:s3:::"
-#            - "Ref" : "ServerlessDeploymentBucket"
-#            - "/*"
-
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
-
-# you can add packaging information here
-#package:
-#  include:
-#    - include-me.py
-#    - include-me-dir/**
-#  exclude:
-#    - exclude-me.py
-#    - exclude-me-dir/**
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - !GetAtt
+          - Subscribers
+          - Arn
+        - !GetAtt
+          - Issues
+          - Arn
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:HeadObject
+      Resource:
+        Fn::Join:
+          - ""
+          - - "arn:aws:s3:::"
+            - "Ref" : "TemplateBucket"
+            - "/*"
+    - Effect: Allow
+      Action:
+        - ses:sendEmail
+      Resource:
+        - ${self:custom.config.SES_SENDER_IDENTITY_ARN}
+        - ${self:custom.config.SES_CONFIGURATION_SET_ARN}
 
 custom:
   default_stage: dev
   stage: ${opt:stage, self:custom.default_stage}
   stack_name: ${self:service}-${self:custom.stage}
+  bucket_prefix: org.dltj
+  # Store configuration and secrets in `config.yml`.  See
+  # http://www.goingserverless.com/blog/keeping-secrets-out-of-git
+  config: ${file(config.yml):${self:custom.stage}}
+
+  pythonRequirements:
+    pythonBin: .venv/bin/python
+    dockerizePip: false
+
+  customDomain:
+    domainName: ${self:custom.config.HOSTNAME}
+    stage: ${self:custom.stage}
+    basePath: ${self:custom.config.BASE_PATH}
+    certificateName: ${self:custom.config.CERTIFICATE_NAME}
+    createRoute53Record: true
+    endpointType: 'regional'
+    securityPolicy: tls_1_2
+    apiType: http
+    autoDomain: false
 
 functions:
-  subscribe:
-    handler: handler.subscribe
+  homepage:
+    handler: homepage.endpoint
     events:
-      - http:
-          path: subscribe
-          method: post
+      - httpApi: 'GET /'
+
+  subscribe:
+    handler: subscribe.endpoint
+    events:
+      - httpApi: 'POST /subscribe'
 
   confirm:
-    handler: handler.confirm
+    handler: confirm.endpoint
     events:
-      - http:
-          path: confirm
-          method: post
+      - httpApi: 'GET /subscribe/confirm/{email}/{identifier}'
 
   unsubscribe:
-    handler: handler.unsubscribe
+    handler: unsubscribe.endpoint
     events:
-      - http:
-          path: unsubscribe
-          method: get
+      - httpApi: 'GET /unsubscribe/{email}/{identifier}'
 
   create_issue:
     handler: handler.create_issue
     events:
-      - http:
-          path: create_issue
-          method: post
+      - httpApi: 'POST /create_issue'
 
   send_issue:
     handler: handler.send_issue
@@ -93,6 +116,13 @@ functions:
     handler: handle.dynamodb_backup
     events: 
       - schedule: rate(1 day)
+
+  # reload_templates:
+  #   handler: reload_templates.endpoint
+  #   events:
+  #     - s3: 
+  #         bucket: !Ref TemplateBucket
+  #         existing: true
 
 
 # CloudFormation resource templates
@@ -169,7 +199,35 @@ resources:
           - Key: Purpose
             Value: ${self:custom.stack_name}
 
+    TemplateBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucket_prefix}.${self:custom.stack_name}.templates
+        AccessControl: Private
+        Tags:
+          - Key: Purpose
+            Value: ${self:custom.stack_name}
+
+
   Outputs:
     SesHealthTopic:
       Description: Topic ARN for SES Feedback Notifications
       Value: !Ref SesHealthTopic
+    TemplateBucket:
+      Description: S3 Bucket to store template files
+      Value: !Ref TemplateBucket
+
+package:
+  include:
+    # - something
+  exclude:
+    - node_modules/**
+    - .venv/**
+    - env/**
+    - __pycache__
+    - config.yml
+    - html-templates/**
+
+plugins:
+  - serverless-python-requirements
+  - serverless-domain-manager

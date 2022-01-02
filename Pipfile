@@ -5,9 +5,11 @@ name = "pypi"
 
 [packages]
 nodeenv = "*"
+jinja2 = "*"
 
 [dev-packages]
 black = "*"
+boto3 = "*"
 
 [requires]
 python_version = "3.9"
