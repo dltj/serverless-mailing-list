@@ -1,12 +1,15 @@
 """ Lambda handler for the homepage """
 
+import os
 import json
 from utilities.log_config import logger
 from utilities.jinja_renderer import site_wrap
 
+BASE_PATH = os.environ["BASE_PATH"]
 
-SIGNUP_FORM = """
-      <form class="form-horizontal" method="post" action="/subscribe">
+subscribe_url = f"{BASE_PATH}/subscribe"
+SIGNUP_FORM = f"""
+      <form class="form-horizontal" method="post" action="{subscribe_url}">
         <div class="form-group">
           <label for="inputEmail3" class="col-sm-2 control-label">Email</label>
           <div class="col-sm-10">

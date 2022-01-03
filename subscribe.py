@@ -12,9 +12,14 @@ from urllib.parse import parse_qs
 import boto3
 from botocore.exceptions import ClientError
 
+BASE_PATH = os.environ["BASE_PATH"]
+
 ses = boto3.client("sesv2")
 dynamodb = boto3.resource("dynamodb")
 subscribers_table = dynamodb.Table(os.environ["SUBSCRIBERS_DYNAMODB_TABLE"])
+
+ses_sender_identity = os.environ["SES_SENDER_IDENTITY_ARN"].split("/")[-1]
+ses_configuration_set = os.environ["SES_CONFIGURATION_SET_ARN"].split("/")[-1]
 
 
 def endpoint(event, context):
@@ -52,9 +57,9 @@ def endpoint(event, context):
     if subscriber and "Item" in subscriber:
         logger.info(f"Subscriber found: {subscriber['Item']=}")
         return site_wrap(
-            title="Problem sending email",
-            content=f"<p>My fault—for some reason I couldn't send a confirmation message to {email}.  Please try again later, or get in touch with me.</p>",
-            statusCode=500,
+            title="Hey! I think you are already subscribed!",
+            content=f"<p>I have {email} on the newsletter subscription list already.  If you aren't receiving it, please get in touch so we can sort out the problem.</p>",
+            statusCode=400,
         )
 
     subscriber = {
@@ -64,21 +69,24 @@ def endpoint(event, context):
         "lastIssueSent": 0,
     }
 
-    base_url = f"https://{event['requestContext']['domainName']}"
+    base_url = f"https://{event['requestContext']['domainName']}{BASE_PATH}"
     confirm_url = f"{base_url}/subscribe/confirm/{email}/{subscriber['id']}"
     email_body = confirmation_email(confirm_url)
 
     try:
         email_response = ses.send_email(
-            FromEmailAddress="jester@dltj.org",
+            FromEmailAddress=ses_sender_identity,
             Destination={"ToAddresses": [email]},
             Content={
                 "Simple": {
-                    "Subject": {"Data": "First Email", "Charset": "UTF-8"},
+                    "Subject": {
+                        "Data": "Link for subscribing to the newsletter enclosed",
+                        "Charset": "UTF-8",
+                    },
                     "Body": {"Html": {"Data": email_body, "Charset": "utf-8"}},
                 },
             },
-            ConfigurationSetName="Newsletter",
+            ConfigurationSetName=ses_configuration_set,
         )
     except ClientError as e:
         logger.error("Could not send email: %", e.response["Error"]["Message"])
