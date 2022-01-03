@@ -3,9 +3,7 @@ service: serverless-mailing-list
 #app: serverless-mailing-list
 #org: your-org-name
 
-# You can pin your service to only deploy with a specific Serverless version
-# Check out our docs for more details
-# frameworkVersion: "=X.X.X"
+frameworkVersion: "=2.70.0"
 
 provider:
   name: aws
@@ -21,6 +19,7 @@ provider:
       Purpose: ${self:service}
 
   environment:
+    BASE_PATH: ${self:custom.config.BASE_PATH}
     TEMPLATE_BUCKET: !Ref TemplateBucket
     SUBSCRIBERS_DYNAMODB_TABLE: !Ref Subscribers
     ISSUES_DYNAMODB_TABLE: !Ref Issues
@@ -29,6 +28,7 @@ provider:
     SES_FIFO_QUEUE: !Ref SesQueue
     SES_LAMBDA_RUN_TIME_SECONDS: ${self:custom.config.SES_LAMBDA_RUN_TIME_SECONDS}
     SES_SEND_RATE_PER_SECOND: ${self:custom.config.SES_SEND_RATE_PER_SECOND}
+    DYNAMODB_BACKUP_RETENTION_DAYS: ${self:custom.config.DYNAMODB_BACKUP_RETENTION_DAYS}
 
   iamRoleStatements:
     - Effect: Allow
@@ -39,6 +39,7 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
+        - dynamodb:CreateBackup
       Resource:
         - !GetAtt
           - Subscribers
@@ -46,6 +47,23 @@ provider:
         - !GetAtt
           - Issues
           - Arn
+    - Effect: Allow
+      Action:
+        - dynamodb:ListBackups
+        - dynamodb:DeleteBackup
+      Resource:
+        - Fn::Join:
+          - ""
+          - - !GetAtt
+              - Subscribers
+              - Arn
+            - "/backup/*"
+        - Fn::Join:
+          - ""
+          - - !GetAtt
+              - Issues
+              - Arn
+            - "/backup/*"
     - Effect: Allow
       Action:
         - s3:GetObject
@@ -125,19 +143,12 @@ functions:
   send_issue:
     handler: send_issue.endpoint
     events:
-      - schedule: rate(1 minute)
+      - schedule: rate(${self:custom.config.SES_LAMBDA_RUN_RATE })
 
   dynamodb_backup:
-    handler: handle.dynamodb_backup
+    handler: dynamodb_backup.endpoint
     events: 
       - schedule: rate(1 day)
-
-  # reload_templates:
-  #   handler: reload_templates.endpoint
-  #   events:
-  #     - s3: 
-  #         bucket: !Ref TemplateBucket
-  #         existing: true
 
 
 # CloudFormation resource templates
