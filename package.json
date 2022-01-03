@@ -4,6 +4,7 @@
   },
   "devDependencies": {
     "serverless-domain-manager": "^5.2.0",
+    "serverless-prune-plugin": "^2.0.0",
     "serverless-python-requirements": "^5.2.2"
   }
 }

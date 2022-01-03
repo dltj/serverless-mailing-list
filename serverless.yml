@@ -8,12 +8,16 @@ frameworkVersion: "=2.70.0"
 provider:
   name: aws
   runtime: python3.8
+  architecture: arm64
+  memorySize: 256
   lambdaHashingVersion: 20201221
   region: ${opt:region, env:AWS_REGION, 'us-east-1'}
   logRetentionInDays: ${opt:logretention, env:AWS_LOG_RETENTION, '14'}
   httpApi:
     useProviderTags: true
     cors: true
+  tags:
+    Purpose: ${self:custom.stack_name}
   deploymentBucket:
     tags:
       Purpose: ${self:service}
@@ -113,42 +117,60 @@ custom:
     securityPolicy: tls_1_2
     apiType: http
     autoDomain: false
+	
+  prune:
+    automatic: true
+    number: 3
 
 functions:
   homepage:
     handler: homepage.endpoint
+    description: Render and output the homepage
     events:
       - httpApi: 'GET /'
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   subscribe:
     handler: subscribe.endpoint
+    description: Handle a subscription request form
     events:
       - httpApi: 'POST /subscribe'
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   confirm:
     handler: confirm.endpoint
+    description: Handle a subscription confirmation link
     events:
       - httpApi: 'GET /subscribe/confirm/{email}/{identifier}'
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   unsubscribe:
     handler: unsubscribe.endpoint
+    description: Handle an unsubscribe confirmation link
     events:
       - httpApi: 'GET /unsubscribe/{email}/{identifier}'
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   create_issue:
     handler: create_issue.endpoint
+    description: Parse issue HTML and enqueue emails to subscribers
     events:
       - httpApi: 'POST /create_issue'
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   send_issue:
     handler: send_issue.endpoint
+    description: Send enqueued subscriber emails
     events:
       - schedule: rate(${self:custom.config.SES_LAMBDA_RUN_RATE })
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   dynamodb_backup:
     handler: dynamodb_backup.endpoint
+    description: Backup DynamoDB databases
     events: 
       - schedule: rate(1 day)
+    onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
 
 # CloudFormation resource templates
@@ -258,3 +280,4 @@ package:
 plugins:
   - serverless-python-requirements
   - serverless-domain-manager
+  - serverless-prune-plugin
