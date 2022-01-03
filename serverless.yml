@@ -23,6 +23,12 @@ provider:
   environment:
     TEMPLATE_BUCKET: !Ref TemplateBucket
     SUBSCRIBERS_DYNAMODB_TABLE: !Ref Subscribers
+    ISSUES_DYNAMODB_TABLE: !Ref Issues
+    SES_SENDER_IDENTITY_ARN: ${self:custom.config.SES_SENDER_IDENTITY_ARN}
+    SES_CONFIGURATION_SET_ARN: ${self:custom.config.SES_CONFIGURATION_SET_ARN}
+    SES_FIFO_QUEUE: !Ref SesQueue
+    SES_LAMBDA_RUN_TIME_SECONDS: ${self:custom.config.SES_LAMBDA_RUN_TIME_SECONDS}
+    SES_SEND_RATE_PER_SECOND: ${self:custom.config.SES_SEND_RATE_PER_SECOND}
 
   iamRoleStatements:
     - Effect: Allow
@@ -56,6 +62,15 @@ provider:
       Resource:
         - ${self:custom.config.SES_SENDER_IDENTITY_ARN}
         - ${self:custom.config.SES_CONFIGURATION_SET_ARN}
+    - Effect: Allow
+      Action:
+        - sqs:sendMessage
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+      Resource:
+        - !GetAtt
+          - SesQueue
+          - Arn
 
 custom:
   default_stage: dev
@@ -103,14 +118,14 @@ functions:
       - httpApi: 'GET /unsubscribe/{email}/{identifier}'
 
   create_issue:
-    handler: handler.create_issue
+    handler: create_issue.endpoint
     events:
       - httpApi: 'POST /create_issue'
 
   send_issue:
-    handler: handler.send_issue
+    handler: send_issue.endpoint
     events:
-      - schedule: rate(1 hour)
+      - schedule: rate(1 minute)
 
   dynamodb_backup:
     handler: handle.dynamodb_backup
@@ -133,6 +148,7 @@ resources:
       Properties:
         FifoQueue: true
         QueueName: ${self:custom.stack_name}-Ses.fifo
+        ContentBasedDeduplication: true
         Tags:
           - Key: Purpose
             Value: ${self:custom.stack_name}

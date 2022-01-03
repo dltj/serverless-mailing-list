@@ -49,7 +49,7 @@ def endpoint(event, context):
             statusCode=400,
         )
 
-    subscriber["subscribedAt"] = str(time.time())
+    subscriber["subscribedAt"] = int(time.time())
 
     logger.info(f"Confirmed subscriber: {subscriber=}")
     response = subscribers_table.put_item(Item=subscriber)

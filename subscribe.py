@@ -57,12 +57,11 @@ def endpoint(event, context):
             statusCode=500,
         )
 
-    timestamp = str(time.time())
     subscriber = {
         "email": email,
         "id": str(uuid.uuid4()),
-        "requestedAt": timestamp,
-        "lastIssueSent": "0",
+        "requestedAt": int(time.time()),
+        "lastIssueSent": 0,
     }
 
     base_url = f"https://{event['requestContext']['domainName']}"
@@ -84,9 +83,9 @@ def endpoint(event, context):
     except ClientError as e:
         logger.error("Could not send email: %", e.response["Error"]["Message"])
         return site_wrap(
-            title="Email address already subscribed",
-            content=f"<p>The email address {email} is already subscribed.</p>",
-            statusCode=400,
+            title="Couldn't send message",
+            content=f"<p>Well, this isn't good.  I couldn't send an email to {email}.  The error has been logged; please get in touch with me to sort it out.</p>",
+            statusCode=500,
         )
     logger.debug(f"AWS SES send {email_response=}")
 
