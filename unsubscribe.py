@@ -3,7 +3,7 @@
 import os
 import json
 from utilities.log_config import logger
-from utilities.jinja_renderer import site_wrap, confirmation_email
+from utilities.jinja_renderer import site_wrap
 
 import boto3
 from botocore.exceptions import ClientError
@@ -52,7 +52,7 @@ def endpoint(event, context):
     logger.info(f"Unsubscribe request: {subscriber=}")
     try:
         response = subscribers_table.delete_item(
-            Key={"email", email}, ReturnValues="ALL_OLD"
+            Key={"email": email}, ReturnValues="ALL_OLD"
         )
     except ClientError as error:
         if error.response["Error"]["Code"] == "ResourceNotFoundException":
