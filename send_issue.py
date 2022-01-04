@@ -79,7 +79,7 @@ def send_email(sqs_msg_body):
             Content={
                 "Simple": {
                     "Subject": {"Data": msg_details["Subject"], "Charset": CHARSET},
-                    "Body": {"Text": {"Data": msg_details["Body"], "Charset": CHARSET}},
+                    "Body": {"Html": {"Data": msg_details["Body"], "Charset": CHARSET}},
                 },
             },
             ConfigurationSetName="Newsletter",

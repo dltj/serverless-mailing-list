@@ -6,7 +6,8 @@ import time
 import uuid
 from base64 import b64decode
 from utilities.log_config import logger
-from utilities.jinja_renderer import site_wrap, confirmation_email
+from utilities.jinja_renderer import site_wrap, email_template
+from utilities.send_email import send_email
 from urllib.parse import parse_qs
 
 import boto3
@@ -14,12 +15,8 @@ from botocore.exceptions import ClientError
 
 BASE_PATH = os.environ["BASE_PATH"]
 
-ses = boto3.client("sesv2")
 dynamodb = boto3.resource("dynamodb")
 subscribers_table = dynamodb.Table(os.environ["SUBSCRIBERS_DYNAMODB_TABLE"])
-
-ses_sender_identity = os.environ["SES_SENDER_IDENTITY_ARN"].split("/")[-1]
-ses_configuration_set = os.environ["SES_CONFIGURATION_SET_ARN"].split("/")[-1]
 
 
 def endpoint(event, context):
@@ -69,25 +66,23 @@ def endpoint(event, context):
         "lastIssueSent": 0,
     }
 
+    h1_header = "Confirm your subscription to DLTJ's Thursday Threads"
+    body_content = """
+    <p style="margin: 0 0 10px;">Thank you for your interest in DLTJ's Thursday Threads.  To confirm your email address as working, please follow the "Subscribe me" link below.</p>
+    <p style="margin: 0 0 10px;">If you received this email by mistake, simply delete it with my apologies for the bother.  You won't be subscribed if you don't follow the "Subscribe me" link.  For any questions about this newsletter, simply reply to this email.</p>
+    """
     base_url = f"https://{event['requestContext']['domainName']}{BASE_PATH}"
     confirm_url = f"{base_url}/subscribe/confirm/{email}/{subscriber['id']}"
-    email_body = confirmation_email(confirm_url)
+    email_body = email_template(
+        h1_header=h1_header,
+        body_content=body_content,
+        preheader="Follow the enclosed link to subscribe!",
+        action_url=confirm_url,
+        action_text="Yes! Subscribe me to the newsletter.",
+    )
 
     try:
-        email_response = ses.send_email(
-            FromEmailAddress=ses_sender_identity,
-            Destination={"ToAddresses": [email]},
-            Content={
-                "Simple": {
-                    "Subject": {
-                        "Data": "Link for subscribing to the newsletter enclosed",
-                        "Charset": "UTF-8",
-                    },
-                    "Body": {"Html": {"Data": email_body, "Charset": "utf-8"}},
-                },
-            },
-            ConfigurationSetName=ses_configuration_set,
-        )
+        send_email(email, h1_header, email_body)
     except ClientError as e:
         logger.error("Could not send email: %", e.response["Error"]["Message"])
         return site_wrap(
@@ -95,7 +90,6 @@ def endpoint(event, context):
             content=f"<p>Well, this isn't good.  I couldn't send an email to {email}.  The error has been logged; please get in touch with me to sort it out.</p>",
             statusCode=500,
         )
-    logger.debug(f"AWS SES send {email_response=}")
 
     logger.info(f"New subscriber: {subscriber=}")
     response = subscribers_table.put_item(Item=subscriber)

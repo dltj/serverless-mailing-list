@@ -9,11 +9,12 @@ import urllib.request
 import urllib.error
 from urllib.parse import parse_qs
 from bs4 import BeautifulSoup
+import boto3
 from utilities.log_config import logger
-from utilities.jinja_renderer import site_wrap
+from utilities.jinja_renderer import site_wrap, email_template
 from utilities.dynamodb_util import paginate_dynamodb_response
 
-import boto3
+BASE_PATH = os.environ["BASE_PATH"]
 
 dynamodb = boto3.resource("dynamodb")
 issues_table = dynamodb.Table(os.environ["ISSUES_DYNAMODB_TABLE"])
@@ -129,6 +130,9 @@ def endpoint(event, context):
     # response = issues_table.put_item(Item=issue_row)
     # logger.debug(f"DynamoDB put_item response: {response}")
 
+    h1_header = f"DLTJ Thursday Threads: {issue_title}"
+    base_url = f"https://{event['requestContext']['domainName']}{BASE_PATH}"
+
     # Loop through subscribers
     for subscriber in paginate_dynamodb_response(subscribers_table.scan):
         logger.debug(f"Checking subscriber {subscriber=}")
@@ -137,12 +141,23 @@ def endpoint(event, context):
             and subscriber["subscribedAt"] > 0
             and subscriber["lastIssueSent"] != issue_number
         ):
+            unsubscribe_url = (
+                f"{base_url}/unsubscribe/{subscriber['email']}/{subscriber['id']}"
+            )
+            email_body = email_template(
+                h1_header=h1_header,
+                body_content=issue_content,
+                preheader="Follow the enclosed link to subscribe!",
+                blog_version_url=issue_url,
+                unsubscribe_url=unsubscribe_url,
+            )
+
             email_params = {
                 "ConfigurationSetName": ses_configuration_set,
                 "Destination": subscriber["email"],
                 "FromEmailAddress": ses_sender_identity,
-                "Subject": issue_title,
-                "Body": issue_content,
+                "Subject": h1_header,
+                "Body": email_body,
             }
             response = ses_fifo_queue.send_message(
                 MessageBody=json.dumps(email_params), MessageGroupId=str(issue_number)

@@ -6,7 +6,7 @@ import jinja2
 TEMPLATE_BUCKET = os.environ["TEMPLATE_BUCKET"]
 
 HTML_PAGE_FILE = "site-wrapper.j2.html"
-CONFIRMATION_EMAIL = "confirmation-email.j2.html"
+EMAIL_TEMPLATE = "email-template.j2.html"
 
 j2_env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="/tmp"))
 s3 = boto3.resource("s3")
@@ -32,9 +32,23 @@ def site_wrap(title, content, statusCode=200):
     return response
 
 
-def confirmation_email(confirmation_url):
-    email_body = _load_template(CONFIRMATION_EMAIL).render(
-        confirmation_url=confirmation_url
+def email_template(
+    h1_header,
+    body_content,
+    preheader=None,
+    action_url=None,
+    action_text=None,
+    blog_version_url=None,
+    unsubscribe_url=None,
+):
+    email_body = _load_template(EMAIL_TEMPLATE).render(
+        h1_header=h1_header,
+        body_content=body_content,
+        preheader=preheader,
+        action_url=action_url,
+        action_text=action_text,
+        blog_version_url=blog_version_url,
+        unsubscribe_url=unsubscribe_url,
     )
     return email_body
 
