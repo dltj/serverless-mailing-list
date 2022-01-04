@@ -9,7 +9,7 @@ provider:
   name: aws
   runtime: python3.8
   architecture: arm64
-  memorySize: 256
+  memorySize: 128
   lambdaHashingVersion: 20201221
   region: ${opt:region, env:AWS_REGION, 'us-east-1'}
   logRetentionInDays: ${opt:logretention, env:AWS_LOG_RETENTION, '14'}
