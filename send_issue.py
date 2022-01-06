@@ -57,7 +57,7 @@ def receive_messages():
         AttributeNames=["SentTimestamp"],
         MaxNumberOfMessages=10,
         MessageAttributeNames=["All"],
-        VisibilityTimeout=1,
+        VisibilityTimeout=20,
         WaitTimeSeconds=0,
     )
 
@@ -116,10 +116,9 @@ def process_message(messages):
             logger.error("Error %s. Traceback: %s", error, tb)
 
 
-def handle_sqs_messages(executor):
+def handle_sqs_messages():
     """
     This function controls the maximum send rate per second
-    :param pool: the thread pool
     """
     start_time = get_time_millis()
     counter = 0
@@ -139,16 +138,12 @@ def handle_sqs_messages(executor):
 
         if SES_SEND_RATE - counter - len(messages) < 0:
             logger.debug(f"Processing partial message list: {SES_SEND_RATE - counter}")
-            executor.submit(process_message, messages[: (SES_SEND_RATE - counter)])
+            process_message(messages[: (SES_SEND_RATE - counter)])
             counter += len(messages)
         else:
             logger.debug(f"Processing full SES_SEND_RATE of messages")
-            executor.submit(process_message, messages)
+            process_message(messages)
             counter += len(messages)
-
-        if len(messages) < 10:
-            stop_process = True
-            break
 
     if get_time_millis() - start_time - 1000 + 50 < 0:
         time.sleep(get_time_millis() - start_time - 1000 + 50)
@@ -160,12 +155,8 @@ def handle_lambda_process():
     """
     overall_start = get_time_millis()
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=PARALLEL_REQUESTS
-    ) as executor:
-
-        while not stop_process and get_time_millis() - overall_start < LAMBDA_RUN_TIME:
-            handle_sqs_messages(executor)
+    while not stop_process and get_time_millis() - overall_start < LAMBDA_RUN_TIME:
+        handle_sqs_messages()
 
 
 def endpoint(event, context):
