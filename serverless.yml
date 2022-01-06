@@ -33,6 +33,7 @@ provider:
     SES_LAMBDA_RUN_TIME_SECONDS: ${self:custom.config.SES_LAMBDA_RUN_TIME_SECONDS}
     SES_SEND_RATE_PER_SECOND: ${self:custom.config.SES_SEND_RATE_PER_SECOND}
     DYNAMODB_BACKUP_RETENTION_DAYS: ${self:custom.config.DYNAMODB_BACKUP_RETENTION_DAYS}
+    CREATE_ISSUE_PASSKEY: ${self:custom.config.CREATE_ISSUE_PASSKEY}
 
   iamRoleStatements:
     - Effect: Allow
@@ -156,6 +157,7 @@ functions:
     description: Parse issue HTML and enqueue emails to subscribers
     events:
       - httpApi: 'POST /create_issue'
+    timeout: 600
     onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   send_issue:
@@ -163,6 +165,7 @@ functions:
     description: Send enqueued subscriber emails
     events:
       - schedule: rate(${self:custom.config.SES_LAMBDA_RUN_RATE })
+    timeout: 600
     onError: ${self:custom.config.LAMBDA_ON_FAILURE_SNS}
 
   dynamodb_backup:

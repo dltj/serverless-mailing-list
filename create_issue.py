@@ -15,6 +15,7 @@ from utilities.jinja_renderer import site_wrap, email_template
 from utilities.dynamodb_util import paginate_dynamodb_response
 
 BASE_PATH = os.environ["BASE_PATH"]
+CREATE_ISSUE_PASSKEY = os.environ["CREATE_ISSUE_PASSKEY"]
 
 dynamodb = boto3.resource("dynamodb")
 issues_table = dynamodb.Table(os.environ["ISSUES_DYNAMODB_TABLE"])
@@ -45,6 +46,14 @@ def endpoint(event, context):
         body = b64decode(body)
     body = parse_qs(body.decode())
     logger.debug(f"Form content: {body=}")
+
+    if "passkey" not in body or body["passkey"][0] != CREATE_ISSUE_PASSKEY:
+        logger.error("CREATE_ISSUE_PASSKEY not supplied or incorrect")
+        return site_wrap(
+            title="CREATE_ISSUE_PASSKEY not correct",
+            content="<p>Are you sure you are supposed to be here?</p>",
+            statusCode=400,
+        )
 
     # Is the issue URL in the posted content?
     if "issue_url" not in body:
@@ -120,17 +129,17 @@ def endpoint(event, context):
         )
 
     # Store metadata for this issue
-    # issue_row = {
-    #     "issue_number": issue_number,
-    #     "subject": issue_title,
-    #     "sentStarting": int(time.time()),
-    #     "subscribers": "0",
-    # }
-    # logger.info(f"New issue: {issue_row=}")
-    # response = issues_table.put_item(Item=issue_row)
-    # logger.debug(f"DynamoDB put_item response: {response}")
+    issue_row = {
+        "issue_number": issue_number,
+        "subject": issue_title,
+        "sentStarting": int(time.time()),
+        "subscribers": "0",
+    }
+    logger.info(f"New issue: {issue_row=}")
+    response = issues_table.put_item(Item=issue_row)
+    logger.debug(f"DynamoDB put_item response: {response}")
 
-    h1_header = f"DLTJ Thursday Threads: {issue_title}"
+    h1_header = issue_title
     base_url = f"https://{event['requestContext']['domainName']}{BASE_PATH}"
 
     # Loop through subscribers
@@ -156,7 +165,7 @@ def endpoint(event, context):
                 "ConfigurationSetName": ses_configuration_set,
                 "Destination": subscriber["email"],
                 "FromEmailAddress": ses_sender_identity,
-                "Subject": h1_header,
+                "Subject": f"DLTJ Thursday Threads: {issue_title}",
                 "Body": email_body,
             }
             response = ses_fifo_queue.send_message(

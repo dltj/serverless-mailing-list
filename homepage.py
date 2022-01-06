@@ -27,5 +27,7 @@ SIGNUP_FORM = f"""
 
 def endpoint(event, context):
     logger.info(json.dumps(event))
-    response = site_wrap(title="Newsletter Signup", content=SIGNUP_FORM)
+    response = site_wrap(
+        title="DLTJ's Thursday Threads Newsletter Signup", content=SIGNUP_FORM
+    )
     return response
