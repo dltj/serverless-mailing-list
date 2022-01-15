@@ -156,7 +156,7 @@ def endpoint(event, context):
             email_body = email_template(
                 h1_header=h1_header,
                 body_content=issue_content,
-                preheader="Follow the enclosed link to subscribe!",
+                preheader="This week's issue of Thursday Threads.",
                 blog_version_url=issue_url,
                 unsubscribe_url=unsubscribe_url,
             )
