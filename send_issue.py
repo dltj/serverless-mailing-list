@@ -1,34 +1,22 @@
-"""
-> AWS-SQS-SES-Lambda-Thread-Polling
->
-> This example illustrates a scenario where an AWS SQS Queue, AWS SES and a Lambda function, work together to deliver messages from SQS to SES. The code given in "sqs-microservice-python3.py" file contains the Lambda code to be run in Python3 environment.
-
-Copyright (c) Keet Malin Sugathadasa — Used and adapted here under the Apache 2 license
-[Keetmalin/AWS-SQS-SES-Lambda-Thread-Polling](https://github.com/Keetmalin/AWS-SQS-SES-Lambda-Thread-Polling)
-
-Adaptations made by jester@dltj.org because the multiprocessing.Pool technique here didn't work on AWS Lambda. See discussion:
- * [python multiprocessing - _multiprocessing.SemLock is not implemented when running on AWS Lambda - Stack Overflow](https://stackoverflow.com/a/61099808/201674)
- * [Replace multiprocessing by thread worker (fixes #60) by leplatrem · Pull Request #103 · mozilla-services/remote-settings-lambdas](https://github.com/mozilla-services/remote-settings-lambdas/pull/103/commits/e124220bf1f395f3cbcbe9ae98e75ad20a389c5b)
-"""
-import os
-import traceback
 import json
+import os
+import time
+import traceback
+
 import boto3
 from botocore.exceptions import ClientError
-import time
-import concurrent.futures
-from utilities.log_config import logger
 
+from utilities.log_config import logger
 
 message_queue = boto3.client("sqs")
 ses = boto3.client("sesv2")
-stop_process = False
+message_queue_empty = False
 
 # set these at environment variables
 QUEUE_URL = os.environ["SES_FIFO_QUEUE"]
-# Time the Lambda will be runnig before shutting down. (max 5 mins)
+# Time the Lambda will be running before shutting down. (max 5 mins)
 LAMBDA_RUN_TIME = int(os.environ["SES_LAMBDA_RUN_TIME_SECONDS"]) * 1000
-# The time in mili-seconds to keep within a second, to ensure SES limitations are not exceeded.
+# The time in milliseconds to keep within a second, to ensure SES limitations are not exceeded.
 THRESHOLD = 100
 # charset supported in messages
 CHARSET = "UTF-8"
@@ -118,19 +106,22 @@ def process_message(messages):
 
 def handle_sqs_messages():
     """
-    This function controls the maximum send rate per second
+    This function controls the maximum send rate per second. It is designed to run for
+    approximately one second.
     """
     start_time = get_time_millis()
     counter = 0
 
+    # While we haven't overrun our per-second send rate and there is more than one second
+    # left since this function invocation started
     while counter < SES_SEND_RATE and get_time_millis() - start_time + THRESHOLD < 1000:
         logger.debug(f"Inside while loop. {counter=}, {start_time=}")
 
         response = receive_messages()
-        global stop_process
+        global message_queue_empty
 
         if response.get("Messages") is None:
-            stop_process = True
+            message_queue_empty = True
             break
 
         messages = response["Messages"]
@@ -145,8 +136,12 @@ def handle_sqs_messages():
             process_message(messages)
             counter += len(messages)
 
-    if get_time_millis() - start_time - 1000 + 50 < 0:
-        time.sleep(get_time_millis() - start_time - 1000 + 50)
+    # Sleep any remainder left of one second since the invocation of
+    # this function.
+    run_time = get_time_millis() - start_time
+    if run_time < 1000:
+        logger.debug(f"{1000 - run_time} milliseconds remaining")
+        time.sleep((1000 - run_time) / 1000)
 
 
 def handle_lambda_process():
@@ -155,7 +150,9 @@ def handle_lambda_process():
     """
     overall_start = get_time_millis()
 
-    while not stop_process and get_time_millis() - overall_start < LAMBDA_RUN_TIME:
+    while (
+        not message_queue_empty and get_time_millis() - overall_start < LAMBDA_RUN_TIME
+    ):
         handle_sqs_messages()
 
 
@@ -166,6 +163,21 @@ def endpoint(event, context):
     :param context: the context in which the lambda is being run
     :return: the final status of the process
     """
+    response = message_queue.get_queue_attributes(
+        QueueUrl=QUEUE_URL,
+        AttributeNames=["ApproximateNumberOfMessages"],
+    )
+    if (
+        not response
+        or not response["Attributes"]
+        or not response["Attributes"]["ApproximateNumberOfMessages"]
+    ):
+        raise Exception("Couldn't read queue length")
+    if response["Attributes"]["ApproximateNumberOfMessages"] == "0":
+        return "Nothing to process"
+    logger.debug(f"{response['Attributes']['ApproximateNumberOfMessages']=}")
+    global message_queue_empty
+    message_queue_empty = False
     handle_lambda_process()
 
     return "Lambda Process Completed"

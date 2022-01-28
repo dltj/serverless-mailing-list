@@ -87,6 +87,7 @@ provider:
         - ${self:custom.config.SES_CONFIGURATION_SET_ARN}
     - Effect: Allow
       Action:
+        - sqs:GetQueueAttributes
         - sqs:sendMessage
         - sqs:ReceiveMessage
         - sqs:DeleteMessage
