@@ -1,18 +1,20 @@
 """ Lambda handler set up a new issue to be sent """
 
-import os
 import json
-import time
+import os
 import re
-from base64 import b64decode
-import urllib.request
+import time
 import urllib.error
+import urllib.request
+from base64 import b64decode
 from urllib.parse import parse_qs
-from bs4 import BeautifulSoup
+
 import boto3
-from utilities.log_config import logger
-from utilities.jinja_renderer import site_wrap, email_template
+from bs4 import BeautifulSoup
+
 from utilities.dynamodb_util import paginate_dynamodb_response
+from utilities.jinja_renderer import email_template, site_wrap
+from utilities.log_config import logger
 
 BASE_PATH = os.environ["BASE_PATH"]
 CREATE_ISSUE_PASSKEY = os.environ["CREATE_ISSUE_PASSKEY"]
@@ -116,6 +118,13 @@ def endpoint(event, context):
             statusCode=400,
         )
     logger.info(f"Got issue {issue_number} on '{issue_title}'")
+
+    issue_content = (
+        """
+<p style="font-size:smaller">I'm Peter Murray, a library technologist and open source enthusiast.  The <em>Thursday Threads</em> newsletter is a weekly hand-crafted compilation of interesting resources at the intersection of library technology, broader technology trends, and internet culture.  This newsletter is free—share it with your colleages and friends without guilt.  There is no advertising (although someday sponsorships might be considered), no third-party newsletter service with your contact information (<a href="https://github.com/dltj/serverless-mailing-list">look at the source</a> if you must), and no email trackers or click-tracking.</p>
+    """
+        + issue_content
+    )
 
     # Have we sent this issue already?
     issue = issues_table.get_item(Key={"issue_number": issue_number})
