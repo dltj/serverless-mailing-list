@@ -119,7 +119,7 @@ custom:
     securityPolicy: tls_1_2
     apiType: http
     autoDomain: false
-	
+
   prune:
     automatic: true
     number: 3
