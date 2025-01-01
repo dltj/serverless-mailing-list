@@ -1,17 +1,18 @@
 """ Lambda handler for the subscribe form post """
 
-import os
 import json
+import os
 import time
 import uuid
 from base64 import b64decode
-from utilities.log_config import logger
-from utilities.jinja_renderer import site_wrap, email_template
-from utilities.send_email import send_email
 from urllib.parse import parse_qs
 
 import boto3
 from botocore.exceptions import ClientError
+
+from utilities.jinja_renderer import email_template, site_wrap
+from utilities.log_config import logger
+from utilities.send_email import send_email
 
 BASE_PATH = os.environ["BASE_PATH"]
 
@@ -36,17 +37,17 @@ def endpoint(event, context):
     body = parse_qs(body.decode())
     logger.debug(f"Form content: {body=}")
 
-    if "email" not in body:
+    if "subscriber" not in body:
         return site_wrap(
             title="Email address field not received",
             content="<p>The form submission did not include an email address. Please try again.</p>",
             statusCode=400,
         )
 
-    if type(body["email"]) is list:
-        email = body["email"][0]
+    if type(body["subscriber"]) is list:
+        email = body["subscriber"][0]
     else:
-        email = body["email"]
+        email = body["subscriber"]
 
     logger.debug(f"Requested {email=}")
     subscriber = subscribers_table.get_item(Key={"email": email})
