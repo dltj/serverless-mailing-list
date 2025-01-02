@@ -100,9 +100,9 @@ def endpoint(event, context):
     # Look for the H1-tagged title and the content body
     ## FIXME: This is hard coded
     soup = BeautifulSoup(page_html, features="html.parser")
-    main_content = soup.find("div", id="main").find("div", class_="page__inner-wrap")
+    main_content = soup.find("main", class_="h-entry")
     issue_title = main_content.find_next("h1").string.rstrip()
-    issue_content = str(main_content.find_next("section"))
+    issue_content = str(main_content.find_next("div", class_="e-content"))
     if not issue_title:
         logger.error(f"Couldn't find 'issue_title' from {issue_url}")
         return site_wrap(
